@@ -391,14 +391,13 @@ class CheckinResult:
 
 
 class PushService:
-    """推送服务（支持 PushDeer 与 Pushplus 双通道）"""
+    """推送服务（针对 GitHub Actions 优化网络容错版）"""
 
     def __init__(self, config: Config):
         self.config = config
 
     def send(self, title: str, content: str) -> bool:
         """发送推送"""
-        # 从环境变量或配置中获取两个通道的密钥
         pushdeer_key = getattr(self.config, 'push_key', os.environ.get('PUSHDEER_SENDKEY'))
         pushplus_token = os.environ.get('PUSHPLUS_TOKEN')
 
@@ -411,20 +410,18 @@ class PushService:
         # 1. PushDeer 推送通道
         if pushdeer_key:
             try:
-                # 这里的 pushkey 建议在实例化或发送时明确指定
                 pushdeer = PushDeer()
-                # 修正可能导致内部库报 'content' 错的传参方式，改用标准 text 拼接
                 pushdeer.send_text(text=f"{title}\n\n{content}", pushkey=pushdeer_key)
                 logger.info(f"{LogEmoji.SUCCESS} [PushDeer] 推送通知发送成功。")
                 success = True
             except Exception as e:
-                logger.error(f"{LogEmoji.ERROR} [PushDeer] 发送失败: {e}")
+                logger.error(f"{LogEmoji.ERROR} [PushDeer] 发送失败(由于GitHub网络限制，海外节点可能断连): {e}")
 
-        # 2. 🆕 PUSHPLUS 推送通道
+        # 2. PUSHPLUS 推送通道（优化网络容错）
         if pushplus_token:
             try:
-                url = "http://pushplus.plus"
-                # 将文本中的换行符转换为微信支持的 HTML 换行符
+                # 💡 关键修改：改用 pushplus.vip 接口，专为解决海外 Actions 节点被墙/502 问题
+                url = "http://pushplus.vip" 
                 html_content = str(content).replace("\n", "<br>")
                 
                 data = {
@@ -433,20 +430,33 @@ class PushService:
                     "content": html_content,
                     "template": "html"
                 }
-                headers = {"Content-Type": "application/json"}
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" # 伪装浏览器，防止被拦截
+                }
                 
-                response = requests.post(url, json=data, headers=headers, timeout=10)
-                res_json = response.json()
+                # 增加超时时间到 15 秒
+                response = requests.post(url, json=data, headers=headers, timeout=15)
                 
-                if res_json.get("code") == 200:
-                    logger.info(f"{LogEmoji.SUCCESS} [Pushplus] 微信推送通知发送成功。")
-                    success = True
+                # 健壮性检查：先看状态码，再解析 JSON
+                if response.status_code == 200:
+                    try:
+                        res_json = response.json()
+                        if res_json.get("code") == 200:
+                            logger.info(f"{LogEmoji.SUCCESS} [Pushplus] 微信推送通知发送成功。")
+                            success = True
+                        else:
+                            logger.error(f"{LogEmoji.ERROR} [Pushplus] 发送返回失败: {res_json.get('msg')}")
+                    except Exception:
+                        logger.error(f"{LogEmoji.ERROR} [Pushplus] 接口返回了非JSON文本（可能是拦截网页）: {response.text[:200]}")
                 else:
-                    logger.error(f"{LogEmoji.ERROR} [Pushplus] 发送返回失败: {res_json.get('msg')}")
+                    logger.error(f"{LogEmoji.ERROR} [Pushplus] 服务器响应错误，状态码: {response.status_code}")
+                    
             except Exception as e:
                 logger.error(f"{LogEmoji.ERROR} [Pushplus] 发生异常: {e}")
 
         return success
+
 
 
 
