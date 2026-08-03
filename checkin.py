@@ -99,8 +99,7 @@ class Config:
     ENV_EXCHANGE_PLAN = "GLADOS_EXCHANGE_PLAN"
     ENV_VERBOSE = "GLADOS_VERBOSE"
 
-    """默认兑换计划"""
-    DEFAULT_EXCHANGE_PLAN = "plan500"
+    
 
     """默认是否输出详细响应"""
     DEFAULT_VERBOSE = False
