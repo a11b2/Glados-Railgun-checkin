@@ -8,7 +8,7 @@ on:
       - 'README.md'
       - 'imgs/**'
   schedule:
-    - cron: '0 4,10 * * *'
+    - cron: '13 4,10 * * *' # 💡 顺便帮您把 0 分改成了 13 分，避开整点 Actions 排队高峰
 
 jobs:
   build:
@@ -49,8 +49,8 @@ jobs:
         python checkin.py
       env:
         PUSHDEER_SENDKEY: ${{ secrets.PUSHDEER_SENDKEY }}
-          # 🆕 新增 PUSHPLUS Token (稍后需要去 GitHub 仓库的 Settings -> Secrets 中配置)
-        PUSHDEER_SENDKEY: ${{ secrets.PUSHDEER_SENDKEY }}
+        # 🆕 新增 PUSHPLUS Token (请去 GitHub 仓库的 Settings -> Secrets 中配置)
+        PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
         GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
