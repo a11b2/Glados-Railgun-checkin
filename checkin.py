@@ -411,6 +411,19 @@ class PushService:
             logger.error(f"{LogEmoji.ERROR} 发送推送通知失败: {e}")
             return False
 
+def push_pushplus(token: str, title: str, content: str) -> bool:
+    """PushPlus 推送"""
+    if not token:
+        return False
+    return _push_request(
+        "PushPlus",
+        "https://www.pushplus.plus/send",
+        json_payload={"token": token, "title": title, "content": content, "template": "html"},
+        success_check=lambda resp, r: r.ok and resp.get("code") == 200,
+        fail_msg_keys=("msg",),
+    )
+
+
 
 class Checker:
     """签到"""
