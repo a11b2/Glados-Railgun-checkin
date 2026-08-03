@@ -329,26 +329,7 @@ class API:
             self._log("warning", LogEmoji.WARNING, "获取积分失败", force=True)
             return "None 积分", 0
 
-    @log_method
-    def exchange(self, cookies: str, plan: str, required_points: int) -> str:
-        """执行兑换"""
-        url = self._get_full_url(self.EXCHANGE_URL)
-        response = self._make_request(url, "POST", {"planType": plan}, cookies)
 
-        if response:
-            data = response.json()
-            code = data.get("code", -2)
-            message = data.get("message", "未知错误")
-
-            if code == 0:
-                self._log("info", LogEmoji.SUCCESS, f"{{ code : {code}, message : {message} }}")
-                return f"兑换成功: {plan}"
-            else:
-                self._log("info", LogEmoji.FAIL, f"{{ code : {code}, message : {message} }}", force=True)
-                return f"兑换失败: {message}"
-        else:
-            self._log("warning", LogEmoji.WARNING, "兑换失败", force=True)
-            return "兑换失败"
 
 
 @dataclass()
@@ -464,13 +445,6 @@ class Checker:
             points_str, points_num = api.get_points(cookie)
             result.points_total = points_str
 
-            # 4. 执行兑换
-            required_points = self.config.EXCHANGE_PLANS.get(self.config.exchange_plan, 50000)
-            self._log(
-                cookie_idx,
-                domain,
-                LogEmoji.EXCHANGE,
-                f"开始兑换 {self.config.exchange_plan} (需要 {required_points} 积分)",
             )
             result.exchange = api.exchange(cookie, self.config.exchange_plan, required_points)
 
