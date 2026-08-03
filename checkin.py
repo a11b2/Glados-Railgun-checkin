@@ -391,37 +391,64 @@ class CheckinResult:
 
 
 class PushService:
-    """推送服务"""
+    """推送服务（支持 PushDeer 与 Pushplus 双通道）"""
 
     def __init__(self, config: Config):
         self.config = config
 
     def send(self, title: str, content: str) -> bool:
         """发送推送"""
-        if not self.config.push_key:
-            logger.info(f"{LogEmoji.WARNING} 未设置推送密钥，跳过推送通知。")
+        # 从环境变量或配置中获取两个通道的密钥
+        pushdeer_key = getattr(self.config, 'push_key', os.environ.get('PUSHDEER_SENDKEY'))
+        pushplus_token = os.environ.get('PUSHPLUS_TOKEN')
+
+        if not pushdeer_key and not pushplus_token:
+            logger.info(f"{LogEmoji.WARNING} 未设置任何推送密钥（PushDeer/Pushplus），跳过推送通知。")
             return False
 
-        try:
-            pushdeer = PushDeer(pushkey=self.config.push_key)
-            pushdeer.send_text(title, desp=content)
-            logger.info(f"{LogEmoji.SUCCESS} 推送通知发送成功。")
-            return True
-        except Exception as e:
-            logger.error(f"{LogEmoji.ERROR} 发送推送通知失败: {e}")
-            return False
+        success = False
 
-def push_pushplus(token: str, title: str, content: str) -> bool:
-    """PushPlus 推送"""
-    if not token:
-        return False
-    return _push_request(
-        "PushPlus",
-        "https://www.pushplus.plus/send",
-        json_payload={"token": token, "title": title, "content": content, "template": "html"},
-        success_check=lambda resp, r: r.ok and resp.get("code") == 200,
-        fail_msg_keys=("msg",),
-    )
+        # 1. PushDeer 推送通道
+        if pushdeer_key:
+            try:
+                # 这里的 pushkey 建议在实例化或发送时明确指定
+                pushdeer = PushDeer()
+                # 修正可能导致内部库报 'content' 错的传参方式，改用标准 text 拼接
+                pushdeer.send_text(text=f"{title}\n\n{content}", pushkey=pushdeer_key)
+                logger.info(f"{LogEmoji.SUCCESS} [PushDeer] 推送通知发送成功。")
+                success = True
+            except Exception as e:
+                logger.error(f"{LogEmoji.ERROR} [PushDeer] 发送失败: {e}")
+
+        # 2. 🆕 PUSHPLUS 推送通道
+        if pushplus_token:
+            try:
+                url = "http://pushplus.plus"
+                # 将文本中的换行符转换为微信支持的 HTML 换行符
+                html_content = str(content).replace("\n", "<br>")
+                
+                data = {
+                    "token": pushplus_token,
+                    "title": title,
+                    "content": html_content,
+                    "template": "html"
+                }
+                headers = {"Content-Type": "application/json"}
+                
+                response = requests.post(url, json=data, headers=headers, timeout=10)
+                res_json = response.json()
+                
+                if res_json.get("code") == 200:
+                    logger.info(f"{LogEmoji.SUCCESS} [Pushplus] 微信推送通知发送成功。")
+                    success = True
+                else:
+                    logger.error(f"{LogEmoji.ERROR} [Pushplus] 发送返回失败: {res_json.get('msg')}")
+            except Exception as e:
+                logger.error(f"{LogEmoji.ERROR} [Pushplus] 发生异常: {e}")
+
+        return success
+
+
 
 
 
