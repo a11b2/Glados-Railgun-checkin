@@ -391,7 +391,7 @@ class CheckinResult:
 
 
 class PushService:
-    """推送服务（针对 GitHub Actions 优化网络容错版）"""
+    """推送服务（纯原生 requests 实现，彻底移除第三方库 Bug 与网络拦截）"""
 
     def __init__(self, config: Config):
         self.config = config
@@ -406,22 +406,37 @@ class PushService:
             return False
 
         success = False
+        
+        # 统一的浏览器请求头伪装，防止被国内云盾/防火墙拦截
+        common_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Content-Type": "application/json"
+        }
 
-        # 1. PushDeer 推送通道
+        # 1. 🚀 PushDeer 通道（改用原生 requests 绕过 pypushdeer 库的 content 报错 Bug）
         if pushdeer_key:
             try:
-                pushdeer = PushDeer()
-                pushdeer.send_text(text=f"{title}\n\n{content}", pushkey=pushdeer_key)
-                logger.info(f"{LogEmoji.SUCCESS} [PushDeer] 推送通知发送成功。")
-                success = True
+                url = "https://pushdeer.com"
+                data = {
+                    "pushkey": pushdeer_key,
+                    "text": title,
+                    "desp": content,
+                    "type": "markdown"
+                }
+                # 使用原生 requests 发送
+                response = requests.post(url, json=data, headers=common_headers, timeout=12)
+                if response.status_code == 200 and "content" in response.text:
+                    logger.info(f"{LogEmoji.SUCCESS} [PushDeer] 原生推送通知发送成功。")
+                    success = True
+                else:
+                    logger.error(f"{LogEmoji.ERROR} [PushDeer] 发送失败，HTTP状态码: {response.status_code}")
             except Exception as e:
-                logger.error(f"{LogEmoji.ERROR} [PushDeer] 发送失败(由于GitHub网络限制，海外节点可能断连): {e}")
+                logger.error(f"{LogEmoji.ERROR} [PushDeer] 发生网络异常(海外节点易受干扰): {e}")
 
-        # 2. PUSHPLUS 推送通道（优化网络容错）
+        # 2. 🚀 PUSHPLUS 通道（恢复标准官方域名 + 强力伪装头绕过拦截）
         if pushplus_token:
             try:
-                # 💡 关键修改：改用 pushplus.vip 接口，专为解决海外 Actions 节点被墙/502 问题
-                url = "http://pushplus.vip" 
+                url = "http://pushplus.plus"
                 html_content = str(content).replace("\n", "<br>")
                 
                 data = {
@@ -430,15 +445,9 @@ class PushService:
                     "content": html_content,
                     "template": "html"
                 }
-                headers = {
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" # 伪装浏览器，防止被拦截
-                }
                 
-                # 增加超时时间到 15 秒
-                response = requests.post(url, json=data, headers=headers, timeout=15)
+                response = requests.post(url, json=data, headers=common_headers, timeout=15)
                 
-                # 健壮性检查：先看状态码，再解析 JSON
                 if response.status_code == 200:
                     try:
                         res_json = response.json()
@@ -448,14 +457,15 @@ class PushService:
                         else:
                             logger.error(f"{LogEmoji.ERROR} [Pushplus] 发送返回失败: {res_json.get('msg')}")
                     except Exception:
-                        logger.error(f"{LogEmoji.ERROR} [Pushplus] 接口返回了非JSON文本（可能是拦截网页）: {response.text[:200]}")
+                        logger.error(f"{LogEmoji.ERROR} [Pushplus] 接口返回了非JSON文本，前100字: {response.text[:100]}")
                 else:
-                    logger.error(f"{LogEmoji.ERROR} [Pushplus] 服务器响应错误，状态码: {response.status_code}")
+                    logger.error(f"{LogEmoji.ERROR} [Pushplus] 服务器拒绝请求，状态码: {response.status_code}")
                     
             except Exception as e:
-                logger.error(f"{LogEmoji.ERROR} [Pushplus] 发生异常: {e}")
+                logger.error(f"{LogEmoji.ERROR} [Pushplus] 发生网络异常: {e}")
 
         return success
+
 
 
 
