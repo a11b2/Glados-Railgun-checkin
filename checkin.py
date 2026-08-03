@@ -22,7 +22,7 @@ class ExchangePlan(Enum):
 
     PLAN100 = "plan100"
     PLAN200 = "plan200"
-    PLAN500 = "plan50000"
+    PLAN500 = "plan500"
 
 
 class APIEndpoint(Enum):
@@ -112,7 +112,7 @@ class Config:
     EXCHANGE_PLANS = {
         ExchangePlan.PLAN100.value: 100,
         ExchangePlan.PLAN200.value: 200,
-        ExchangePlan.PLAN500.value: 50000,
+        ExchangePlan.PLAN500.value: 500,
     }
 
     def __init__(self):
@@ -473,7 +473,7 @@ class Checker:
             result.points_total = points_str
 
             # 4. 执行兑换
-            required_points = self.config.EXCHANGE_PLANS.get(self.config.exchange_plan, 500)
+            required_points = self.config.EXCHANGE_PLANS.get(self.config.exchange_plan, 50000)
             self._log(
                 cookie_idx,
                 domain,
